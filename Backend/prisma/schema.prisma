@@ -1,0 +1,119 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+model Tenant {
+  id        String    @id @default(uuid(7))
+  name      String
+  slug      String    @unique
+  apiKey    String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  chatbots  Chatbot[]
+}
+
+model Chatbot {
+  id        String          @id @default(uuid(7))
+  tenantId  String
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  sourceUrl String
+  chunks    DocumentChunk[]
+
+  ingestionJobs IngestionJob[]
+
+  @@index([tenantId])
+}
+
+enum IngestionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model IngestionJob {
+  id        String  @id @default(uuid(7))
+  tenantId  String
+  chatbotId String
+  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+
+  status    IngestionStatus @default(PENDING)
+  sourceUrl String?
+
+  totalChunks     Int @default(0)
+  processedChunks Int @default(0)
+  failedChunks    Int @default(0)
+
+  error String?
+
+  chunks DocumentChunk[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([tenantId])
+  @@index([chatbotId])
+  @@index([tenantId, status])
+}
+
+model DocumentChunk {
+  id        String  @id @default(uuid(7))
+  tenantId  String
+  chatbotId String
+  chatbot   Chatbot @relation(fields: [chatbotId], references: [id], onDelete: Cascade)
+
+  ingestionJobId String?
+  ingestionJob   IngestionJob? @relation(fields: [ingestionJobId], references: [id], onDelete: SetNull)
+
+  content String
+
+  embeddings768  Embedding768[]
+  embeddings1536 Embedding1536[]
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([chatbotId])
+  @@index([ingestionJobId])
+}
+
+model Embedding768 {
+  id              String        @id @default(uuid(7))
+  tenantId        String
+  chatbotId       String
+  documentChunkId String        @unique
+  documentChunk   DocumentChunk @relation(fields: [documentChunkId], references: [id], onDelete: Cascade)
+
+  model     String
+  embedding Unsupported("vector(768)")
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([chatbotId])
+}
+
+model Embedding1536 {
+  id              String        @id @default(uuid(7))
+  tenantId        String
+  chatbotId       String
+  documentChunkId String        @unique
+  documentChunk   DocumentChunk @relation(fields: [documentChunkId], references: [id], onDelete: Cascade)
+
+  model     String
+  embedding Unsupported("vector(1536)")
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([chatbotId])
+}
